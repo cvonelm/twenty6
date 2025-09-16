@@ -1,3 +1,10 @@
+// SPDX-License-Identifier: MIT
+//
+// Catch2 twenty6 ringbuffer test cases
+//
+// Copyright (C) 2025 Technische Universität Dresden
+// Christian von Elm <christian.von_elm@tu-dresden.de>
+
 #include <catch2/catch_test_macros.hpp>
 #include <cstdint>
 #include <sys/types.h>
@@ -36,7 +43,7 @@ TEST_CASE("Can read and write  the buffer", "[rw_on_rb]")
 
     res->publish();
 
-    uint64_t* read_ptr = reinterpret_cast<uint64_t*>(res->read(sizeof(uint64_t)));
+    const uint64_t* read_ptr = reinterpret_cast<const uint64_t*>(res->read(sizeof(uint64_t)));
     REQUIRE(read_ptr != nullptr);
     REQUIRE(*read_ptr == 42);
 }
@@ -63,12 +70,12 @@ TEST_CASE("Wraparound works", "[Wraparound]")
     *uint = 42;
     res->publish();
 
-    std::byte* result = res->read(ev_size);
+    const std::byte* result = res->read(ev_size);
 
     REQUIRE(result != nullptr);
-    uint = reinterpret_cast<uint64_t*>(result + ev_size - sizeof(uint64_t));
+    const uint64_t* output = reinterpret_cast<const uint64_t*>(result + ev_size - sizeof(uint64_t));
 
-    REQUIRE(*uint == 42);
+    REQUIRE(*output == 42);
 }
 
 TEST_CASE("Read fails on empty buffer", "[read_on_empty]")

@@ -1,3 +1,10 @@
+// SPDX-License-Identifier: MIT
+//
+// Basic on-ringbuffer types
+//
+// Copyright (C) 2025 Technische Universität Dresden
+// Christian von Elm <christian.von_elm@tu-dresden.de>
+
 #pragma once
 
 #include <atomic>

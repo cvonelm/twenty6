@@ -1,3 +1,10 @@
+// SPDX-License-Identifier: MIT
+//
+// Main Ringbuf class for interfacing with the twenty6 ringbuffer
+//
+// Copyright (C) 2025 Technische Universität Dresden
+// Christian von Elm <christian.von_elm@tu-dresden.de>
+
 #pragma once
 
 #include <twenty6/types.hpp>
@@ -258,7 +265,7 @@ public:
      * Errors:
      *  - There are not size bytes to peek at in the buffer, returns nullptr
      */
-    std::byte* peek(size_t size)
+    const std::byte* peek(size_t size)
     {
         uint64_t head = hdr_->head.load();
 
@@ -285,7 +292,7 @@ public:
      * Errors:
      *  - There are not size bytes to read from the buffer, returns nullptr
      */
-    std::byte* read(size_t size)
+    const std::byte* read(size_t size)
     {
         auto* ptr = peek(size);
         if (ptr == nullptr)

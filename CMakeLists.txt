@@ -1,3 +1,10 @@
+# SPDX-License-Identifier: MIT
+# 
+# Main twenty6 CMake file
+#
+# Copyright (C) 2025 Technische Universität Dresden
+# Christian von Elm <christian.von_elm@tu-dresden.de>
+
 cmake_minimum_required(VERSION 3.11)
 project(twenty6 VERSION 0.0.1)
 
@@ -7,6 +14,11 @@ set(CMAKE_CXX_STANDARD_REQUIRED True)
 
 add_library(twenty6 INTERFACE)
 target_include_directories(twenty6 INTERFACE include)
+
+# Fuzzer
+
+add_executable(fuzzer example/fuzzer.cpp)
+target_link_libraries(fuzzer PRIVATE twenty6)
 
 
 # Tests 
