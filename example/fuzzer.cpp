@@ -5,7 +5,11 @@
 // Copyright (C) 2025 Technische Universität Dresden
 // Christian von Elm <christian.von_elm@tu-dresden.de>
 
+#include <memory>
 #include <twenty6/ringbuf.hpp>
+
+#include <iostream>
+#include <stdexcept>
 
 #include <chrono>
 #include <random>
@@ -37,14 +41,17 @@ enum class RingbufWriteOps : uint64_t
 
 void read_thread(int fd)
 {
-    auto res = twenty6::Ringbuf::attach_ringbuf(fd);
-
-    int pagesz = getpagesize();
-    if (!res.has_value())
+    std::unique_ptr<twenty6::Ringbuf> rb;
+    try
     {
-        std::print("Could not initialize read size of ringbuf!\n");
+        rb = std::make_unique<twenty6::Ringbuf>(twenty6::Ringbuf::attach_ringbuf(fd));
+    }
+    catch (std::runtime_error& e)
+    {
+        std::cerr << "Could not initialize read side of ring buffer: " << e.what() << std::endl;
         std::exit(1);
     }
+    int pagesz = getpagesize();
 
     std::mt19937_64 rng(std::chrono::steady_clock::now().time_since_epoch().count());
     std::uniform_int_distribution<int> cmd_distrib(0, 2);
@@ -66,7 +73,7 @@ void read_thread(int fd)
         {
         case RingbufReadOps::READ:
         {
-            const std::byte* msg = res->read(msg_size);
+            const std::byte* msg = rb->read(msg_size);
             if (msg == nullptr)
             {
                 // TODO: logic to check if the buf is really empty or really full
@@ -75,7 +82,7 @@ void read_thread(int fd)
 
             if (memcmp(msg, buf + local_read_pos, msg_size) != 0)
             {
-                std::print("Message and backing buffer are not equal!\n");
+                std::cerr << "Message and backing buffer are not equal!\n";
                 std::exit(1);
             }
 
@@ -84,12 +91,12 @@ void read_thread(int fd)
         break;
 
         case RingbufReadOps::CONSUME:
-            res->consume();
+            rb->consume();
 
             break;
         case RingbufReadOps::PEEK:
         {
-            const std::byte* msg = res->peek(msg_size);
+            const std::byte* msg = rb->peek(msg_size);
             if (msg == nullptr)
             {
                 continue;
@@ -97,7 +104,7 @@ void read_thread(int fd)
 
             if (memcmp(msg, buf + local_read_pos, msg_size) != 0)
             {
-                std::print("Message and backing buffer are not equal!\n");
+                std::cerr << "Message and backing buffer are not equal!\n";
                 std::exit(1);
             }
         }
@@ -129,16 +136,20 @@ int main(void)
      */
     memcpy(buf + pagesz, buf, pagesz);
 
-    auto res = twenty6::Ringbuf::create_memfd_ringbuf(1);
-    if (!res.has_value())
+    std::unique_ptr<twenty6::Ringbuf> rb;
+    try
     {
-        std::print("Could not create ringbuffer: {}\n", res.error().str);
+        rb = std::make_unique<twenty6::Ringbuf>(twenty6::Ringbuf::create_memfd_ringbuf(1));
+    }
+    catch (std::runtime_error& e)
+    {
+        std::cerr << "Could not create ringbuffer: " << e.what() << std::endl;
     }
 
     /*
      * Start a separate thread for reading
      */
-    std::thread read(read_thread, res->fd());
+    std::thread read(read_thread, rb->fd());
     uint64_t local_write_pos = 0;
 
     std::uniform_int_distribution<int> cmd_distrib(0, 1);
@@ -150,11 +161,11 @@ int main(void)
         switch (command)
         {
         case RingbufWriteOps::PUBLISH:
-            res->publish();
+            rb->publish();
             break;
         case RingbufWriteOps::RESERVE:
         {
-            std::byte* msg = res->reserve(input);
+            std::byte* msg = rb->reserve(input);
             if (msg == nullptr)
             {
                 continue;

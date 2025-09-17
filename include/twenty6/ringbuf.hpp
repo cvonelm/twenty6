@@ -7,13 +7,14 @@
 
 #pragma once
 
+#include <stdexcept>
 #include <twenty6/types.hpp>
+
+#include <fmt/core.h>
 
 #include <algorithm>
 #include <cassert>
-#include <expected>
-#include <format>
-#include <print>
+#include <iostream>
 #include <vector>
 
 #include <cstddef>
@@ -30,72 +31,61 @@ extern "C"
 namespace twenty6
 {
 
-class RingbufError
-{
-public:
-    std::string str;
-};
-
 class Ringbuf
 {
 public:
-    static std::expected<Ringbuf, RingbufError> create_memfd_ringbuf(size_t pages) noexcept
+    static Ringbuf create_memfd_ringbuf(size_t pages)
     {
         int fd = memfd_create("", 0);
         if (fd == -1)
         {
-            return std::unexpected(RingbufError(
-                std::format("Can not create memfd for Ringbuffer: {}", strerror(errno))));
+            throw std::runtime_error(
+                fmt::format("Can not create memfd for Ringbuffer: {}", strerror(errno)));
         }
         if (ftruncate(fd, getpagesize() * (pages + 1)) == -1)
         {
-            return std::unexpected(RingbufError(std::format(
-                "Can not set size of ring buffer to {} pages: {}", pages, strerror(errno))));
+            throw std::runtime_error(fmt::format("Can not set size of ring buffer to {} pages: {}",
+                                                 pages, strerror(errno)));
         }
 
         auto rb = Ringbuf::attach_ringbuf(fd);
-        if (!rb.has_value())
-        {
-            return rb;
-        }
 
-        rb->owns_fd_ = true;
+        rb.owns_fd_ = true;
 
-        rb.value().hdr_->size = pages * getpagesize();
-        rb.value().hdr_->version = 1;
-        rb.value().hdr_->head = 0;
-        rb.value().hdr_->tail = 0;
+        rb.hdr_->size = pages * getpagesize();
+        rb.hdr_->version = 1;
+        rb.hdr_->head = 0;
+        rb.hdr_->tail = 0;
 
         return rb;
     }
 
-    static std::expected<Ringbuf, RingbufError> attach_ringbuf(int fd)
+    static Ringbuf attach_ringbuf(int fd)
     {
 
         off_t filesize = lseek(fd, 0, SEEK_END);
 
         if (filesize == -1)
         {
-            return std::unexpected(RingbufError(
-                std::format("Could not get size of underlying file: {},", strerror(errno))));
+            throw std::runtime_error(
+                fmt::format("Could not get size of underlying file: {},", strerror(errno)));
         }
 
         if (lseek(fd, 0, SEEK_CUR) == -1)
         {
-            return std::unexpected(RingbufError(
-                std::format("Could not rewind underlying file: {},", strerror(errno))));
+            throw std::runtime_error(
+                fmt::format("Could not rewind underlying file: {},", strerror(errno)));
         }
 
         if (filesize % getpagesize() != 0)
         {
-            return std::unexpected(
-                RingbufError(("The file size must be a multiple of the page size!")));
+            throw std::runtime_error("The file size must be a multiple of the page size!");
         }
 
         if (filesize == getpagesize())
         {
-            return std::unexpected(RingbufError(
-                ("The data portion of the ring buffer must be at least one page big!")));
+            throw std::runtime_error(
+                ("The data portion of the ring buffer must be at least one page big!"));
         }
 
         Ringbuf rb;
@@ -106,8 +96,8 @@ public:
             mmap(nullptr, data_size * 2 + getpagesize(), PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
         if (first_mapping == MAP_FAILED)
         {
-            return std::unexpected(RingbufError(
-                std::format("Could not create ringbuffer mapping! {}\n", strerror(errno))));
+            throw std::runtime_error(
+                fmt::format("Could not create ringbuffer mapping! {}\n", strerror(errno)));
         }
 
         void* second_mapping =
@@ -116,8 +106,8 @@ public:
 
         if (second_mapping == MAP_FAILED)
         {
-            return std::unexpected(RingbufError(
-                std::format("Could not create ringbuffer mapping! {}\n", strerror(errno))));
+            throw std::runtime_error(
+                fmt::format("Could not create ringbuffer mapping! {}\n", strerror(errno)));
         }
         rb.hdr_ = reinterpret_cast<struct ringbuf_header*>(first_mapping);
         rb.data_ = reinterpret_cast<std::byte*>(rb.hdr_) + getpagesize();
@@ -170,16 +160,16 @@ public:
             switch (cur.first)
             {
             case PARTS::LOCAL_HEAD:
-                print_parts.push_back(std::format("reserved: {}", cur.second - consumed));
+                print_parts.push_back(fmt::format("reserved: {}", cur.second - consumed));
                 break;
             case PARTS::TAIL:
-                print_parts.push_back(std::format("free : {}", cur.second - consumed));
+                print_parts.push_back(fmt::format("free : {}", cur.second - consumed));
                 break;
             case PARTS::LOCAL_TAIL:
-                print_parts.push_back(std::format("consumed: {}", cur.second - consumed));
+                print_parts.push_back(fmt::format("consumed: {}", cur.second - consumed));
                 break;
             case PARTS::HEAD:
-                print_parts.push_back(std::format("used: {}", cur.second - consumed));
+                print_parts.push_back(fmt::format("used: {}", cur.second - consumed));
                 break;
             }
             consumed = cur.second;
@@ -189,25 +179,25 @@ public:
         switch (contents[0].first)
         {
         case PARTS::HEAD:
-            print_parts.push_back(std::format("used: {}", hdr_->size - consumed));
+            print_parts.push_back(fmt::format("used: {}", hdr_->size - consumed));
             break;
         case PARTS::TAIL:
-            print_parts.push_back(std::format("free: {}", hdr_->size - consumed));
+            print_parts.push_back(fmt::format("free: {}", hdr_->size - consumed));
             break;
         case PARTS::LOCAL_TAIL:
-            print_parts.push_back(std::format("consumed: {}", hdr_->size - consumed));
+            print_parts.push_back(fmt::format("consumed: {}", hdr_->size - consumed));
             break;
         case PARTS::LOCAL_HEAD:
-            print_parts.push_back(std::format("reserved: {}", hdr_->size - consumed));
+            print_parts.push_back(fmt::format("reserved: {}", hdr_->size - consumed));
             break;
         }
 
-        std::print("[ ");
+        std::cerr << "[ " << std::endl;
         for (auto& part : print_parts)
         {
-            std::print("{} ", part);
+            std::cerr << part << " ";
         }
-        std::print("]\n");
+        std::cerr << "]" << std::endl;
     }
 
     /*
@@ -363,10 +353,13 @@ public:
 
 private:
     Ringbuf() = default;
+
     struct ringbuf_header* hdr_ = nullptr;
     std::byte* data_ = nullptr;
+
     int fd_ = -1;
     bool owns_fd_ = false;
+
     size_t local_head_ = 0;
     size_t local_tail_ = 0;
 };

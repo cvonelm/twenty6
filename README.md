@@ -1,6 +1,6 @@
 # Twenty6: A RingBuffer Library
 
-Twenty6 is a fuzzed and tested C++23 ring buffer library based on memfd's for
+Twenty6 is a fuzzed and tested C++17 ring buffer library based on memfd's for
 efficiently sharing information between threads.
 
 ## Interface
@@ -8,27 +8,22 @@ efficiently sharing information between threads.
 To create a new ring buffer:
 
 ```cpp
-auto res = twenty6::Ringbuf::create_memfd_ringbuf(1);
-if (!res.has_value())
-{
-    std::print("Could not create ringbuffer: {}\n", res.error().str);
-}
+twenty6::Ringbuf rb = twenty6::Ringbuf::create_memfd_ringbuf(1);
 ```
 
-`create_memfd_ringbuf` creates a ringbuffer with the given amount of pages and returns a
-`std::expected<Ringbuf, RingbufError>`.
+`create_memfd_ringbuf` creates a ring buffer with the given amount of pages of memory.
+If an error occured, this throws std::runtime_error.
 
 To attach to an existing ring buffer:
 
 
 ```cpp
-auto res = twenty6::Ringbuf::attach_ringbuf(other_rb.fd());
-if (!res.has_value())
-{
-    std::print("Could not attach to ringbuffer: {}\n", res.error().str);
-}
+twenty6::Ringbuf res = twenty6::Ringbuf::attach_ringbuf(other_rb.fd());
 ```
+If an error occured, this throws std::runtime_error.
 
+
+### Ring Buffer Operations
 The ring buffers support the following operations:
 
 
