@@ -31,6 +31,8 @@ extern "C"
 namespace twenty6
 {
 
+typedef void (*watermark_cb_fn)(void*);
+
 class Ringbuf
 {
 public:
@@ -118,6 +120,29 @@ public:
     int fd()
     {
         return fd_;
+    }
+
+    uint64_t size()
+    {
+        return hdr_->size;
+    }
+
+    /*
+     * Sets a high watermark for the ring buffer.
+     * On a write operation that fills the buffer beyond "watermark" bytes,
+     * watermark_cb(payload) is called
+     */
+    void set_watermark(uint64_t watermark, watermark_cb_fn cb, void* payload)
+    {
+        if (watermark != 0 && cb == nullptr)
+        {
+            throw std::runtime_error(
+                "If watermark is not zero, you must set the callback function!\n");
+        }
+
+        watermark_ = watermark;
+        watermark_cb_ = cb;
+        watermark_payload_ = payload;
     }
 
     void print()
@@ -242,9 +267,19 @@ public:
     /*
      * Make all the data reserve()d since the last call of publish() available
      */
+
     bool publish()
     {
+        uint64_t tail = hdr_->tail.load();
         hdr_->head.store(local_head_);
+
+        if (watermark_ != 0)
+        {
+            if (get_fill() > watermark_)
+            {
+                watermark_cb_(watermark_payload_);
+            }
+        }
         return true;
     }
 
@@ -328,11 +363,17 @@ public:
         this->local_head_ = other.local_head_;
         this->fd_ = other.fd_;
         this->owns_fd_ = other.owns_fd_;
+        this->watermark_ = other.watermark_;
+        this->watermark_cb_ = other.watermark_cb_;
+        this->watermark_payload_ = other.watermark_payload_;
 
         other.hdr_ = nullptr;
         other.data_ = nullptr;
         other.fd_ = -1;
-        this->owns_fd_ = false;
+        other.owns_fd_ = false;
+        other.watermark_ = 0;
+        other.watermark_cb_ = nullptr;
+        other.watermark_payload_ = 0;
     }
 
     Ringbuf& operator=(Ringbuf&& other)
@@ -343,15 +384,39 @@ public:
         this->local_head_ = other.local_head_;
         this->fd_ = other.fd_;
         this->owns_fd_ = other.owns_fd_;
+        this->watermark_ = other.watermark_;
+        this->watermark_cb_ = other.watermark_cb_;
+        this->watermark_payload_ = other.watermark_payload_;
 
         other.hdr_ = nullptr;
         other.data_ = nullptr;
         other.fd_ = -1;
-        this->owns_fd_ = false;
+        other.owns_fd_ = false;
+        other.watermark_ = 0;
+        other.watermark_cb_ = nullptr;
+        other.watermark_payload_ = 0;
+        other.owns_fd_ = false;
         return *this;
     }
 
 private:
+    /*
+     * Gets the amount of data that is in the ring buffer
+     */
+    uint64_t get_fill()
+    {
+        uint64_t tail = hdr_->tail.load();
+        uint64_t head = hdr_->head.load();
+        if (head > tail)
+        {
+            return head - tail;
+        }
+        else
+        {
+            return head + hdr_->size - tail;
+        }
+    }
+
     Ringbuf() = default;
 
     struct ringbuf_header* hdr_ = nullptr;
@@ -362,5 +427,9 @@ private:
 
     size_t local_head_ = 0;
     size_t local_tail_ = 0;
+
+    uint64_t watermark_ = 0;
+    watermark_cb_fn watermark_cb_ = nullptr;
+    void* watermark_payload_ = nullptr;
 };
 } // namespace twenty6

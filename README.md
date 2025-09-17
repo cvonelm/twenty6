@@ -51,6 +51,21 @@ const uint8_t* msg = ringbuffer.peek(amount);
 // the write side to read.
 ringbuffer.consume();
 ```
+### Special Operations
+
+twenty6 supports setting a high watermark. Sometimes, busy-polling on the ring-buffer
+for new data is inefficient, and what one really wants to do is be notified when the
+ring buffer is filled with at least x amount of data.
+
+```cpp
+void function(void * payload);
+rb.set_watermark(watermark_amount, function, payload)
+```
+
+After the watermark has been set to a non-zero amount, every time the ring buffer contains more than `watermark_amount` bytes, `function` is called with `void* payload` as the argument. Watermarks can be deregistered by calling `set_watermark` with `watermark_amount` to zero.
+
+Then, a fitting implementation of `function` can be used to signal out-of-band that the ring buffer is filled to some degree, for example by using Linux `eventfd`s.
+
 
 ## Trivia
 

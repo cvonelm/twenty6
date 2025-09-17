@@ -110,3 +110,52 @@ TEST_CASE("Reserve succeeds if ev_size == rb_size -1", "[write_fails_ev_size_eq_
         rb = std::make_unique<twenty6::Ringbuf>(twenty6::Ringbuf::create_memfd_ringbuf(1)));
     REQUIRE(rb->reserve(getpagesize() - 1) != nullptr);
 }
+
+void watermark_cb(void* payload)
+{
+    *reinterpret_cast<bool*>(payload) = true;
+}
+
+TEST_CASE("Watermark gets called", "[watermark_gets_called]")
+{
+    std::unique_ptr<twenty6::Ringbuf> rb;
+
+    REQUIRE_NOTHROW(
+        rb = std::make_unique<twenty6::Ringbuf>(twenty6::Ringbuf::create_memfd_ringbuf(1)));
+
+    bool called = false;
+    rb->set_watermark(4, &watermark_cb, &called);
+    rb->reserve(8);
+    rb->publish();
+    REQUIRE(called == true);
+}
+
+TEST_CASE("Watermark does not get called for writes <= watermark",
+          "[watermark_does_not_get_called]")
+{
+    std::unique_ptr<twenty6::Ringbuf> rb;
+
+    REQUIRE_NOTHROW(
+        rb = std::make_unique<twenty6::Ringbuf>(twenty6::Ringbuf::create_memfd_ringbuf(1)));
+
+    bool called = false;
+    rb->set_watermark(4, &watermark_cb, &called);
+    rb->reserve(4);
+    rb->publish();
+    REQUIRE(called == false);
+}
+
+TEST_CASE("Can unregister watermark", "[unregister_watermark]")
+{
+    std::unique_ptr<twenty6::Ringbuf> rb;
+
+    REQUIRE_NOTHROW(
+        rb = std::make_unique<twenty6::Ringbuf>(twenty6::Ringbuf::create_memfd_ringbuf(1)));
+
+    bool called = false;
+    rb->set_watermark(4, &watermark_cb, &called);
+    rb->set_watermark(0, nullptr, nullptr);
+    rb->reserve(8);
+    rb->publish();
+    REQUIRE(called == false);
+}

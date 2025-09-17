@@ -8,15 +8,13 @@
 cmake_minimum_required(VERSION 3.11)
 project(twenty6 VERSION 0.0.1)
 
-
-set(CMAKE_CXX_STANDARD 23)
-set(CMAKE_CXX_STANDARD_REQUIRED True)
+find_package(fmt REQUIRED)
 
 add_library(twenty6 INTERFACE)
 target_include_directories(twenty6 INTERFACE include)
+target_link_libraries(twenty6 INTERFACE fmt::fmt-header-only)
 
 # Fuzzer
-
 add_executable(fuzzer example/fuzzer.cpp)
 target_link_libraries(fuzzer PRIVATE twenty6)
 
