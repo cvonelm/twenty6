@@ -11,18 +11,22 @@ project(twenty6 VERSION 0.0.1)
 find_package(fmt REQUIRED)
 
 add_library(twenty6 INTERFACE)
-target_include_directories(twenty6 INTERFACE include)
+target_include_directories(twenty6 INTERFACE $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include>)
 target_link_libraries(twenty6 INTERFACE fmt::fmt-header-only)
+add_library(twenty6::twenty6 ALIAS  twenty6)
 
-# Fuzzer
-add_executable(fuzzer example/fuzzer.cpp)
-target_link_libraries(fuzzer PRIVATE twenty6)
+if(PROJECT_IS_TOP_LEVEL)
+    # Fuzzer
+    add_executable(fuzzer example/fuzzer.cpp)
+    target_link_libraries(fuzzer PRIVATE twenty6)
 
+    # Tests
+    find_package(Catch2 REQUIRED)
 
-# Tests 
-find_package(Catch2 REQUIRED)
-include(CTest)
-include(Catch)
-add_executable(tests tests/test.cpp)
-target_link_libraries(tests PRIVATE Catch2::Catch2WithMain twenty6)
-catch_discover_tests(tests)
+    include(CTest)
+    include(Catch)
+
+    add_executable(tests tests/test.cpp)
+    target_link_libraries(tests PRIVATE Catch2::Catch2WithMain twenty6)
+    catch_discover_tests(tests)
+endif()
